@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rest-demo-deploy
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: rest-demo
+  template:
+    metadata:
+      name: rest-demo-pod
+      labels:
+        app: rest-demo
+    spec:
+      containers:
+        - name: rest-demo-container
+          image: 268081345066.dkr.ecr.ap-northeast-2.amazonaws.com/rest-demo-order1:v1
+          ports:
+            - containerPort: 8080
