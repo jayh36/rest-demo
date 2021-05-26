@@ -15,6 +15,13 @@ spec:
     spec:
       containers:
         - name: rest-demo-container
-          image: 268081345066.dkr.ecr.ap-northeast-2.amazonaws.com/rest-demo-order1:v1
+          image: 268081345066.dkr.ecr.ap-northeast-2.amazonaws.com/rest-demo-order1:v2
+          volumeMounts:
+            - name: persistent-storage
+              mountPath: /data
           ports:
             - containerPort: 8080
+      volumes:
+        - name: persistent-storage
+          persistentVolumeClaim:
+            claimName: efs-claim
