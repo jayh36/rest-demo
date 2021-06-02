@@ -7,6 +7,10 @@ import org.springframework.web.servlet.ModelAndView;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.util.Enumeration;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 
 @Slf4j
 @Component
@@ -16,8 +20,9 @@ public class ExecuteTimeInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         long startTime = System.currentTimeMillis();
         request.setAttribute("startTime", startTime);
-        log.info("### startTime: " + startTime);
         log.info("### reqUrl: " + request.getRequestURI());
+        log.info("### startTime: " + startTime);
+        log.info("### Parameters: " + String.valueOf(request.getParameterMap().entrySet()));
         return true;
     }
 
@@ -27,7 +32,6 @@ public class ExecuteTimeInterceptor implements HandlerInterceptor {
         long endTime = System.currentTimeMillis();
         long executeTime = endTime - startTime;
         request.setAttribute("executeTime", executeTime);
-
         log.info("### ["+ handler + "] executeTime : " + executeTime + "ms");
     }
 

@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.demo.repository.StatisticsRepository">
+
+    <select id="getEquipmentChange" resultType="hashmap">
+        <![CDATA[
+        /* StatisticsRepository.getEquipmentChange */
+        WITH  wv_zo
+        AS  ( SELECT zo.org_id
+                   , zso.sup_org_id
+              FROM ( SELECT   org_id
+                     FROM    (SELECT  'B211320000' org_id
+                              FROM    dual
+                              UNION ALL
+                              SELECT  'B311329999' org_id
+                              FROM    dual
+                              ) v1
+                     WHERE    #{br_sel_cl_cd} <> '4'
+                     AND      #{sale_org_id} IN ('B211320000', 'B311329999')
+                     UNION ALL
+                     SELECT   #{sale_org_id}  AS org_id
+                     FROM     dual
+                     WHERE    NOT(#{br_sel_cl_cd} <> '4'
+                     AND      #{sale_org_id} IN ('B211320000', 'B311329999'))
+                   )zo
+                   ,zord_stc_org zso
+              WHERE zo.org_id = zso.org_id
+            )
+            , wv_zem
+        as  ( SELECT  a.eqp_mdl_cd
+                   ,  a.mfact_cd
+                   , 'N' lte_gb
+                   ,  a.rep_eqp_mdl_cd
+              FROM   (SELECT  eqp_mdl_cd
+                           ,  mfact_cd
+                           ,  rep_eqp_mdl_cd /* swing */
+                      FROM    zeqp_eqp_mdl zem
+                      WHERE((#{iphone_id} = 'N' and #{br_sel_cl_cd} = '4'
+                      AND     zem.mfact_cd NOT IN (SELECT COMM_CD_VAL mfact_cd --CG KG
+                                                   FROM   zngm_comm_cd_dtl
+                                                   WHERE  COMM_CD_ID  = 'ZSTS_P_IPHONE'
+                                                   AND    EFF_END_DT >= TO_CHAR(SYSDATE, 'YYYYMMDD')
+                                                  ))
+                      OR    (#{iphone_id}        = 'Y' OR #{br_sel_cl_cd} <> '4'))
+                      AND  ((#{mfact_cd}        <> '99999' /* swing L2->L5 */
+                      AND    #{eqp_mdl_cd1}      = 'ZZZZZ'
+                      AND     mfact_cd      LIKE  DECODE(#{mfact_cd}   , 'ZZZZZ', '%', #{mfact_cd}) || '%' /* swing */
+                      AND     eqp_mdl_cd    LIKE  DECODE(#{eqp_mdl_cd1}, 'ZZZZZ', '%', #{eqp_mdl_cd1}))
+                      OR    (#{mfact_cd}         = '99999' /* swing */
+                      AND    #{eqp_mdl_cd1}      = 'ZZZZZ'
+                      AND     mfact_cd    NOT IN (SELECT  comm_cd_val
+                                                  FROM    zngm_comm_cd_dtl       /* 공통코드 상세    */
+                                                  WHERE   comm_cd_id  = 'ZSTS_C_EMSC1'  /* 단말기제조사통계코드 */
+                                                  AND     comm_cd_val NOT IN ('99999') /* swing */
+                                                  UNION ALL
+                                                  SELECT '100ZZ' /* swing */
+                                                  FROM    DUAL
+                                                 )
+                      AND    eqp_mdl_cd    LIKE  DECODE(#{eqp_mdl_cd1}, 'ZZZZZ', '%', #{eqp_mdl_cd1}))
+                      OR   (#{eqp_mdl_cd1}     != 'ZZZZZ') ) /* swing */
+                     )a
+            )
+            , wv_zsts
+        AS  ( SELECT /*+ use_concat leading(zo) index(zsts (sup_sale_org_id) (sale_org_id))*/
+                     MAX(CASE WHEN #{search_cl_cd} = '1' THEN sale_org_id
+                              WHEN #{search_cl_cd} = '2' THEN decode(#{rep_eqp_yn},'Y',zem.rep_eqp_mdl_cd,zsts.eqp_mdl_cd) /* swing */
+                          END) AS sale_org_id
+                   , MAX(zsts.sup_sum_cl_cd) AS sup_sum_cl_cd
+                   , SUM(gnrl_cell_chg_allot_cnt) gnrl_cell_chg_allot_cnt
+                   , SUM(corp_cell_chg_cnt) gnrl_cell_chg_cnt
+                   , SUM(gnrl_cell_chg_alotrcall_cnt) gnrl_cell_chg_alotrcall_cnt
+                   , SUM(wap_cmp_cnt) wap_cmp_cnt
+                   , SUM(nwap_cmp_cnt) nwap_cmp_cnt
+                   , SUM(vip_cmp_cnt) vip_cmp_cnt
+                   , SUM(gold_cmp_cnt) gold_cmp_cnt
+                   , SUM(evt_cmp_cnt) evt_cmp_cnt
+                   , SUM(cmp_cell_chg_recall_cnt) cmp_cell_chg_recall_cnt
+                   , SUM(gnrl_cell_chg_cash_cnt) gnrl_cell_chg_cash_cnt
+                   , SUM(excl_cell_chg_cnt) excl_cell_chg_cnt
+                   , SUM(excl_cell_chg_rcal_cnt) excl_cell_chg_rcal_cnt
+                   , SUM(case when strd_dt < '20160224' then 0 else zsts.gift_cell_chg_cnt end) AS gift_cell_chg_cnt
+                   , SUM(case when strd_dt < '20160224' then 0 else zsts.gift_cell_chg_recall_cnt end) AS gift_cell_chg_recall_cnt
+                   , SUM(case when strd_dt < '20160224' then 0 else zsts.nicph_fdr_chg_cnt end) AS nicph_fdr_chg_cnt
+                   , SUM(case when strd_dt < '20160224' then 0 else zsts.nicph_fdr_chg_recall_cnt end) AS nicph_fdr_chg_recall_cnt
+                   , SUM(zsts.gift_cell_chg_lght_cnt)       AS gift_cell_chg_light_cnt
+                   , SUM(case when strd_dt >= '20150801' then zsts.gift_cell_chg_lght_rcal_cnt else 0 end) AS gift_cell_chg_light_recall_cnt
+              FROM   zord_eqp_chg_stc zsts
+                   , wv_zo zo
+                   , wv_zem zem
+              WHERE #{psnm_yn}               = 'N'
+              AND    zsts.strd_dt BETWEEN    #{strd_dt_from} AND #{strd_dt_to}
+              AND    zsts.post_op_br_cl_cd = #{post_op_br_cl_cd}
+              AND    zsts.cust_typ_stc_cd  = #{cust_typ_stc_cd}
+              AND    svc_gr_stc_cd         = #{svc_gr_cl_cd}
+              AND    eqp_typ_stc_cd        = #{eqp_typ_stc_cd}
+              AND    zsts.eqp_mdl_cd       =  zem.eqp_mdl_cd
+              AND    op_seq                = '1'
+              AND  ((sup_sum_cl_cd         = '1'
+              AND    sale_org_id           =  zo.org_id)
+              OR     sup_sale_org_id       =  zo.org_id)
+              GROUP  BY
+                     CASE WHEN #{search_cl_cd} = '1' THEN sale_org_id
+                          WHEN #{search_cl_cd} = '2' THEN decode(#{rep_eqp_yn},'Y',zem.rep_eqp_mdl_cd,zsts.eqp_mdl_cd) /* swing */
+                     END
+              UNION   ALL
+              SELECT /*+ use_concat leading(zo) index(zsts (sup_sale_org_id) (sale_org_id))*/
+                     MAX(CASE WHEN #{search_cl_cd} = '1' THEN sale_org_id
+                              WHEN #{search_cl_cd} = '2' THEN decode(#{rep_eqp_yn},'Y',zem.rep_eqp_mdl_cd,zsts.eqp_mdl_cd) /* swing */
+                          END) AS sale_org_id
+                   , MAX(zsts.sup_sum_cl_cd) AS sup_sum_cl_cd
+                   , SUM(gnrl_cell_chg_allot_cnt) gnrl_cell_chg_allot_cnt
+                   , SUM(corp_cell_chg_cnt) gnrl_cell_chg_cnt
+                   , SUM(gnrl_cell_chg_alotrcall_cnt) gnrl_cell_chg_alotrcall_cnt
+                   , SUM(wap_cmp_cnt) wap_cmp_cnt
+                   , SUM(nwap_cmp_cnt) nwap_cmp_cnt
+                   , SUM(vip_cmp_cnt) vip_cmp_cnt
+                   , SUM(gold_cmp_cnt) gold_cmp_cnt
+                   , SUM(evt_cmp_cnt) evt_cmp_cnt
+                   , SUM(cmp_cell_chg_recall_cnt) cmp_cell_chg_recall_cnt
+                   , SUM(gnrl_cell_chg_cash_cnt) gnrl_cell_chg_cash_cnt
+                   , SUM(excl_cell_chg_cnt) excl_cell_chg_cnt
+                   , SUM(excl_cell_chg_rcal_cnt) excl_cell_chg_rcal_cnt
+                   , SUM(case when strd_dt < '20160224' then 0 else zsts.gift_cell_chg_cnt end) AS gift_cell_chg_cnt
+                   , SUM(case when strd_dt < '20160224' then 0 else zsts.gift_cell_chg_recall_cnt end) AS gift_cell_chg_recall_cnt
+                   , SUM(case when strd_dt < '20160224' then 0 else zsts.nicph_fdr_chg_cnt end) AS nicph_fdr_chg_cnt
+                   , SUM(case when strd_dt < '20160224' then 0 else zsts.nicph_fdr_chg_recall_cnt end) AS nicph_fdr_chg_recall_cnt
+                   , SUM(zsts.gift_cell_chg_lght_cnt)       AS gift_cell_chg_light_cnt
+                   , SUM(case when strd_dt >= '20150801' then zsts.gift_cell_chg_lght_rcal_cnt else 0 end) AS gift_cell_chg_light_recall_cnt
+              FROM   zord_psnm_eqp_chg_stc zsts
+                   , wv_zo zo
+                   , wv_zem zem
+              WHERE #{psnm_yn}              <> 'N'
+              AND    psnm_org_stc_cl_cd    = #{psnm_yn}
+              AND    zsts.strd_dt BETWEEN    #{strd_dt_from} AND #{strd_dt_to}
+              AND    zsts.post_op_br_cl_cd = #{post_op_br_cl_cd}
+              AND    zsts.cust_typ_stc_cd  = #{cust_typ_stc_cd}
+              AND    svc_gr_stc_cd         = #{svc_gr_cl_cd}
+              AND    eqp_typ_stc_cd        = #{eqp_typ_stc_cd}
+              AND    zsts.eqp_mdl_cd       =  zem.eqp_mdl_cd
+              AND    op_seq                = '1'
+              AND  ((sup_sum_cl_cd         = '1'
+              AND    sale_org_id           =  zo.org_id)
+              OR     sup_sale_org_id       =  zo.org_id)
+              GROUP  BY
+                     CASE WHEN #{search_cl_cd} = '1' THEN sale_org_id
+                          WHEN #{search_cl_cd} = '2' THEN decode(#{rep_eqp_yn},'Y',zem.rep_eqp_mdl_cd,zsts.eqp_mdl_cd) /* swing */
+                     END
+            )
+        SELECT  /*+ "zord_eqp_chg_stc_f0010|STS-김태훈(ZZ15218)-이진영(P059439)" */
+                  sale_org_cd
+                , sale_org_id
+                , sale_org_nm
+                , sup_sum_cl_cd
+                , gnrl_cell_chg_allot_cnt
+                , gnrl_cell_chg_cnt
+                , gnrl_cell_chg_alotrcall_cnt
+                , wap_cmp_cnt
+                , nwap_cmp_cnt
+                , vip_cmp_cnt
+                , gold_cmp_cnt
+                , evt_cmp_cnt
+                , cmp_cell_chg_recall_cnt
+                , gnrl_cell_chg_cash_cnt
+                , excl_cell_chg_cnt
+                , excl_cell_chg_rcal_cnt
+                , gift_cell_chg_cnt
+                , gift_cell_chg_recall_cnt
+                , nicph_fdr_chg_cnt
+                , nicph_fdr_chg_recall_cnt
+                , gift_cell_chg_light_cnt
+                , gift_cell_chg_light_recall_cnt
+        FROM
+        (
+        SELECT
+                  sale_org_cd
+                , MAX(sale_org_id                     )   AS sale_org_id
+                , MAX(sale_org_nm                     )   AS sale_org_nm
+                , MAX(sup_sum_cl_cd                   )   AS sup_sum_cl_cd
+                , SUM(zsts.gnrl_cell_chg_allot_cnt    )   AS gnrl_cell_chg_allot_cnt
+                , SUM(zsts.gnrl_cell_chg_cnt          )   AS gnrl_cell_chg_cnt
+                , SUM(zsts.gnrl_cell_chg_alotrcall_cnt)   AS gnrl_cell_chg_alotrcall_cnt
+                , SUM(zsts.wap_cmp_cnt                )   AS wap_cmp_cnt
+                , SUM(zsts.nwap_cmp_cnt               )   AS nwap_cmp_cnt
+                , SUM(zsts.vip_cmp_cnt                )   AS vip_cmp_cnt
+                , SUM(zsts.gold_cmp_cnt               )   AS gold_cmp_cnt
+                , SUM(zsts.evt_cmp_cnt                )   AS evt_cmp_cnt
+                , SUM(zsts.cmp_cell_chg_recall_cnt    )   AS cmp_cell_chg_recall_cnt
+                , SUM(zsts.gnrl_cell_chg_cash_cnt     )   AS gnrl_cell_chg_cash_cnt
+                , SUM(zsts.excl_cell_chg_cnt          )   AS excl_cell_chg_cnt
+                , SUM(zsts.excl_cell_chg_rcal_cnt     )   AS excl_cell_chg_rcal_cnt
+                , SUM(zsts.gift_cell_chg_cnt     )   AS gift_cell_chg_cnt
+                , SUM(zsts.gift_cell_chg_recall_cnt     )   AS gift_cell_chg_recall_cnt
+                , SUM(zsts.nicph_fdr_chg_cnt)             AS nicph_fdr_chg_cnt
+                , SUM(zsts.nicph_fdr_chg_recall_cnt)      AS nicph_fdr_chg_recall_cnt
+                , SUM(zsts.gift_cell_chg_light_cnt)       AS gift_cell_chg_light_cnt
+                , SUM(zsts.gift_cell_chg_light_recall_cnt)  AS gift_cell_chg_light_recall_cnt
+        FROM    (
+                  SELECT   zso.org_cd||zso.sub_org_cd                     AS sale_org_cd
+                         , sale_org_id                                    AS sale_org_id
+                         , MAX(zso.org_nm)                                AS sale_org_nm
+                         , sup_sum_cl_cd                                  AS sup_sum_cl_cd
+                         , NVL(SUM(zsts.gnrl_cell_chg_allot_cnt    ), 0)  AS gnrl_cell_chg_allot_cnt
+                         , NVL(SUM(zsts.gnrl_cell_chg_cnt          ), 0)  AS gnrl_cell_chg_cnt
+                         , NVL(SUM(zsts.gnrl_cell_chg_alotrcall_cnt), 0)  AS gnrl_cell_chg_alotrcall_cnt
+                         , NVL(SUM(zsts.wap_cmp_cnt                ), 0)  AS wap_cmp_cnt
+                         , NVL(SUM(zsts.nwap_cmp_cnt               ), 0)  AS nwap_cmp_cnt
+                         , NVL(SUM(zsts.vip_cmp_cnt                ), 0)  AS vip_cmp_cnt
+                         , NVL(SUM(zsts.gold_cmp_cnt               ), 0)  AS gold_cmp_cnt
+                         , NVL(SUM(zsts.evt_cmp_cnt                ), 0)  AS evt_cmp_cnt
+                         , NVL(SUM(zsts.cmp_cell_chg_recall_cnt    ), 0)  AS cmp_cell_chg_recall_cnt
+                         , NVL(SUM(zsts.gnrl_cell_chg_cash_cnt     ), 0)  AS gnrl_cell_chg_cash_cnt
+                         , NVL(SUM(zsts.excl_cell_chg_cnt          ), 0)  AS excl_cell_chg_cnt
+                         , NVL(SUM(zsts.excl_cell_chg_rcal_cnt     ), 0)  AS excl_cell_chg_rcal_cnt
+                         , NVL(SUM(zsts.gift_cell_chg_cnt     ), 0)  AS gift_cell_chg_cnt
+                         , NVL(SUM(zsts.gift_cell_chg_recall_cnt     ), 0)  AS gift_cell_chg_recall_cnt
+                         , NVL(SUM(zsts.nicph_fdr_chg_cnt     ), 0)  AS nicph_fdr_chg_cnt
+                         , NVL(SUM(zsts.nicph_fdr_chg_recall_cnt     ), 0)  AS nicph_fdr_chg_recall_cnt
+                         , NVL(SUM(zsts.gift_cell_chg_light_cnt     ), 0)  AS gift_cell_chg_light_cnt
+                         , NVL(SUM(zsts.gift_cell_chg_light_recall_cnt     ), 0)  AS gift_cell_chg_light_recall_cnt
+                  FROM     wv_zsts        zsts
+                         , zord_stc_org   zso
+                  WHERE   #{search_cl_cd}     = '1'
+                  AND      zsts.sale_org_id = zso.org_id
+                  GROUP BY
+                           zso.org_cd||zso.sub_org_cd
+                         , sale_org_id
+                         , sup_sum_cl_cd
+                  UNION ALL
+                  SELECT   DECODE(sale_org_id,'ZZZZZ','기타',sale_org_id) AS sale_org_cd
+                         , DECODE(sale_org_id,'ZZZZZ','기타',sale_org_id) AS sale_org_id
+                         , NVL(zem.eqp_mdl_nm,'기타')                     AS sale_org_nm
+                         , '1'                                  AS sup_sum_cl_cd
+                         , NVL(SUM(zsts.gnrl_cell_chg_allot_cnt    ), 0)  AS gnrl_cell_chg_allot_cnt
+                         , NVL(SUM(zsts.gnrl_cell_chg_cnt          ), 0)  AS gnrl_cell_chg_cnt
+                         , NVL(SUM(zsts.gnrl_cell_chg_alotrcall_cnt), 0)  AS gnrl_cell_chg_alotrcall_cnt
+                         , NVL(SUM(zsts.wap_cmp_cnt                ), 0)  AS wap_cmp_cnt
+                         , NVL(SUM(zsts.nwap_cmp_cnt               ), 0)  AS nwap_cmp_cnt
+                         , NVL(SUM(zsts.vip_cmp_cnt                ), 0)  AS vip_cmp_cnt
+                         , NVL(SUM(zsts.gold_cmp_cnt               ), 0)  AS gold_cmp_cnt
+                         , NVL(SUM(zsts.evt_cmp_cnt                ), 0)  AS evt_cmp_cnt
+                         , NVL(SUM(zsts.cmp_cell_chg_recall_cnt    ), 0)  AS cmp_cell_chg_recall_cnt
+                         , NVL(SUM(zsts.gnrl_cell_chg_cash_cnt     ), 0)  AS gnrl_cell_chg_cash_cnt
+                         , NVL(SUM(zsts.excl_cell_chg_cnt          ), 0)  AS excl_cell_chg_cnt
+                         , NVL(SUM(zsts.excl_cell_chg_rcal_cnt     ), 0)  AS excl_cell_chg_rcal_cnt
+                         , NVL(SUM(zsts.gift_cell_chg_cnt     ), 0)  AS gift_cell_chg_cnt
+                         , NVL(SUM(zsts.gift_cell_chg_recall_cnt     ), 0)  AS gift_cell_chg_recall_cnt
+                         , NVL(SUM(zsts.nicph_fdr_chg_cnt     ), 0)  AS nicph_fdr_chg_cnt
+                         , NVL(SUM(zsts.nicph_fdr_chg_recall_cnt     ), 0)  AS nicph_fdr_chg_recall_cnt
+                         , NVL(SUM(zsts.gift_cell_chg_light_cnt     ), 0)  AS gift_cell_chg_light_cnt
+                         , NVL(SUM(zsts.gift_cell_chg_light_recall_cnt     ), 0)  AS gift_cell_chg_light_recall_cnt
+                  FROM     wv_zsts        zsts
+                         , zeqp_eqp_mdl   zem
+                  WHERE   #{search_cl_cd}     = '2'
+                  AND      zsts.sale_org_id = zem.eqp_mdl_cd(+)
+                  GROUP BY
+                           DECODE(sale_org_id,'ZZZZZ','기타',sale_org_id)
+                         , DECODE(sale_org_id,'ZZZZZ','기타',sale_org_id)
+                         , NVL(zem.eqp_mdl_nm,'기타')
+                         , sup_sum_cl_cd
+                ) zsts
+        GROUP BY
+                  sale_org_cd
+        ORDER BY
+                  sale_org_cd
+        )
+        ]]>
+    </select>
+
+
+</mapper>

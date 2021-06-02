@@ -6,6 +6,7 @@ target/
 
 ### properties
 application-real-db.properties
+/k8s
 
 ### STS ###
 .apt_generated

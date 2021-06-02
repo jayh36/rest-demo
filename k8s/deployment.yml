@@ -15,13 +15,25 @@ spec:
     spec:
       containers:
         - name: rest-demo-container
-          image: 268081345066.dkr.ecr.ap-northeast-2.amazonaws.com/rest-demo-order1:v2
+          image: 268081345066.dkr.ecr.ap-northeast-2.amazonaws.com/rest-demo-order1:v1
           volumeMounts:
             - name: persistent-storage
               mountPath: /data
+          env:
+          - name: DB_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: rest-demo-secret
+                key: db_username
+          - name: DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: rest-demo-secret
+                key: db_password
           ports:
             - containerPort: 8080
       volumes:
         - name: persistent-storage
           persistentVolumeClaim:
             claimName: efs-claim
+      
