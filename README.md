@@ -24,3 +24,4 @@
 8. AWS 클러스터 토큰 가져오기 -> 로컬 쿠버네티스 클라이언트에게 바라볼 될 대상 지정 하는것
 - aws eks --region ap-northeast-2 update-kubeconfig --name rest-demo-order1
 9. 소스내 k8s 경로에 있는 yaml 파일로 pod 배포하고 service 배포하기
+10. CI/CD 구성하기
