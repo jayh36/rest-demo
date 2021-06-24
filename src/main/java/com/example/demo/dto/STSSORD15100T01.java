@@ -13,7 +13,9 @@ import javax.validation.constraints.NotNull;
 @Getter
 @AllArgsConstructor
 public class STSSORD15100T01 {
-    String rec_cnt; // 반복수
+    //String rec_cnt; // 반복수
+    int page;
+    int page_size;
     @NotEmpty(message = "please provide a search_cl_cd")
     String search_cl_cd; // 조회기준
     String strd_dt_from; // 기준일자시작일

@@ -3,7 +3,25 @@
 
 <mapper namespace="com.example.demo.repository.StatisticsRepository">
 
+    <sql id="prePaging">
+        SELECT OUTER_TBL.*
+        FROM ( SELECT COUNT(*) OVER() TOTAL_COUNT
+                    , ROWNUM PAGE
+                    , INNER_TBL.*
+               FROM (
+    </sql>
+    <sql id="afterPaging">
+                    ) INNER_TBL
+            ) OUTER_TBL
+        WHERE 1=1
+       <if test="page != null and page_size != null">
+            AND OUTER_TBL.PAGE <![CDATA[>=]]> ( #{page_size} * ( #{page} - 1 ) ) + 1
+            AND ROWNUM <![CDATA[<=]]> #{page_size}
+        </if>
+    </sql>
+
     <select id="getEquipmentChange" resultType="hashmap">
+        <include refid="prePaging"/>
         <![CDATA[
         /* StatisticsRepository.getEquipmentChange */
         WITH  wv_zo
@@ -265,6 +283,7 @@
                   sale_org_cd
         )
         ]]>
+        <include refid="afterPaging"/>
     </select>
 
 
